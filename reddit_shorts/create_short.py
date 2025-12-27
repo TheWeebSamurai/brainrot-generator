@@ -211,13 +211,13 @@ def create_short_video(**kwargs) -> str | None:
             if not os.path.exists(tts_combined_srt_path):
                 print("Warning: SRT file was not created by Whisper.")
                 # Fallback: create an empty SRT file to prevent ffmpeg error if subtitles are mandatory in filter graph
+                with open(tts_combined_srt_path, 'w') as f:
+                    f.write("")
+        except Exception as e:
+            print(f"Error during Whisper transcription: {e}. Subtitles might be missing.")
+            # Fallback: create an empty SRT file
             with open(tts_combined_srt_path, 'w') as f:
                 f.write("") 
-    except Exception as e:
-        print(f"Error during Whisper transcription: {e}. Subtitles might be missing.")
-        # Fallback: create an empty SRT file
-        with open(tts_combined_srt_path, 'w') as f:
-            f.write("") 
 
     # Background Music Processing
     if resource_music_link and os.path.exists(resource_music_link):

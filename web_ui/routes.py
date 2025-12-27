@@ -177,21 +177,12 @@ def get_characters():
     
     chars = []
     for char in characters:
-        # Find the image file
-        image_filename = None
-        for ext in ['.jpg', '.jpeg', '.png']:
-            potential_path = os.path.join('static', 'characters', char['name'], f'image{ext}')
-            if os.path.exists(os.path.join('web_ui', potential_path)):
-                image_filename = f'image{ext}'
-                break
-        
-        if image_filename:
-            chars.append({
-                "id": char['name'],
-                "name": char['display_name'],
-                "image": f"/api/character-image/{char['name']}",
-                "voice": char['voice']
-            })
+        chars.append({
+            "id": char['name'],
+            "name": char['display_name'],
+            "image": f"/api/character-image/{char['name']}",
+            "voice": char['voice']
+        })
     return jsonify(chars)
 
 @main_bp.route('/api/character-image/<character_name>', methods=['GET'])

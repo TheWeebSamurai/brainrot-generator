@@ -6,6 +6,26 @@ Created by [egebese](https://x.com/egebese).
 
 **Acknowledgements:** This project is a significantly modified version of the original [reddit-shorts-generator by gavink97](https://github.com/gavink97/reddit-shorts-generator.git). While the core functionality has been adapted for local use with different TTS and story input methods, and now includes a Web UI, much of the foundational video processing logic and project structure is derived from this original work.
 
+## Quick Setup
+
+To get started quickly, create the required directories and add some basic assets:
+
+```bash
+# Create required directories
+mkdir -p resources/footage resources/music resources/characters
+
+# Add a sample background video (replace with your own MP4 file)
+# cp /path/to/your/video.mp4 resources/footage/
+
+# Add background music (replace with your own audio file)
+# cp /path/to/your/music.mp3 resources/music/
+
+# For characters (optional, for dialogue features)
+# mkdir resources/characters/Alice
+# cp /path/to/alice_image.jpg resources/characters/Alice/image.jpg
+# echo '{"voice": "en_us_002", "display_name": "Alice"}' > resources/characters/Alice/config.json
+```
+
 ## Key Features
 
 *   **Web-Based User Interface:** Easily create videos through a user-friendly web page.
