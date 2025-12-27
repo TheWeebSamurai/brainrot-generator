@@ -38,6 +38,8 @@ def run_local_video_generation(**kwargs) -> str | None:
         text_content=story_selftext,
         story_id=story_id,
         temp_dir=current_story_temp_dir,
+        dialogue=submission_data.get('dialogue', []),
+        is_dialogue=submission_data.get('is_dialogue', False),
         **kwargs # Pass through kwargs which should include the 'voice' parameter
     )
 

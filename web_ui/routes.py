@@ -168,7 +168,61 @@ def get_music():
         })
     return jsonify(tracks)
 
-@main_bp.route('/api/generate', methods=['POST'])
+@main_bp.route('/api/characters', methods=['GET'])
+def get_characters():
+    """Return list of available characters"""
+    from reddit_shorts.config import characters
+    if not characters:
+        return jsonify([])
+    
+    chars = []
+    for char in characters:
+        # Find the image file
+        image_filename = None
+        for ext in ['.jpg', '.jpeg', '.png']:
+            potential_path = os.path.join('static', 'characters', char['name'], f'image{ext}')
+            if os.path.exists(os.path.join('web_ui', potential_path)):
+                image_filename = f'image{ext}'
+                break
+        
+        if image_filename:
+            chars.append({
+                "id": char['name'],
+                "name": char['display_name'],
+                "image": f"/api/character-image/{char['name']}",
+                "voice": char['voice']
+            })
+    return jsonify(chars)
+
+@main_bp.route('/api/character-image/<character_name>', methods=['GET'])
+def get_character_image(character_name):
+    """Serve character images"""
+    from reddit_shorts.config import character_resources_path
+    char_dir = os.path.join(character_resources_path, character_name)
+    
+    if os.path.exists(char_dir):
+        for file in os.listdir(char_dir):
+            if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                image_path = os.path.join(char_dir, file)
+                return send_file(image_path, mimetype=f'image/{file.split(".")[-1].lower()}')
+    
+    return jsonify({"error": "Character image not found"}), 404
+
+@main_bp.route('/api/subtitle-defaults', methods=['GET'])
+def get_subtitle_defaults():
+    """Return default subtitle settings"""
+    from reddit_shorts.config import SUBTITLE_FONT, SUBTITLE_FONT_SIZE, SUBTITLE_MARGIN_V, SUBTITLE_BOLD, SUBTITLE_OUTLINE_COLOUR, SUBTITLE_BORDER_STYLE, SUBTITLE_OUTLINE, SUBTITLE_SHADOW, SUBTITLE_SHADOW_COLOUR
+    return jsonify({
+        'subtitle_font': SUBTITLE_FONT,
+        'subtitle_font_size': SUBTITLE_FONT_SIZE,
+        'subtitle_margin_v': SUBTITLE_MARGIN_V,
+        'subtitle_bold': SUBTITLE_BOLD,
+        'subtitle_outline_colour': SUBTITLE_OUTLINE_COLOUR,
+        'subtitle_border_style': SUBTITLE_BORDER_STYLE,
+        'subtitle_outline': SUBTITLE_OUTLINE,
+        'subtitle_shadow': SUBTITLE_SHADOW,
+        'subtitle_shadow_colour': SUBTITLE_SHADOW_COLOUR
+    })
 def generate_video():
     """Generate a video from the provided script and settings"""
     data = request.json
@@ -188,7 +242,16 @@ Story:
         'filter': data.get('filter', False),
         'voice': data.get('voice', 'en_us_002'),  # Default TikTok voice
         'background_video': data.get('background_video', None),
-        'background_music': data.get('background_music', None)
+        'background_music': data.get('background_music', None),
+        'subtitle_font': data.get('subtitle_font', None),
+        'subtitle_font_size': data.get('subtitle_font_size', None),
+        'subtitle_margin_v': data.get('subtitle_margin_v', None),
+        'subtitle_bold': data.get('subtitle_bold', None),
+        'subtitle_outline_colour': data.get('subtitle_outline_colour', None),
+        'subtitle_border_style': data.get('subtitle_border_style', None),
+        'subtitle_outline': data.get('subtitle_outline', None),
+        'subtitle_shadow': data.get('subtitle_shadow', None),
+        'subtitle_shadow_colour': data.get('subtitle_shadow_colour', None)
     }
     
     try:

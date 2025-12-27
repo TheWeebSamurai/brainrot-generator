@@ -1,4 +1,5 @@
 import os
+import json
 
 # Determine the project root based on the location of this config file.
 # Assumes config.py is in 'reddit_shorts' and 'resources' is in the parent directory.
@@ -93,3 +94,49 @@ bad_words_list = [
 # TIKTOK_SESSION_ID_TTS = os.environ.get('TIKTOK_SESSION_ID_TTS', 'YOUR_SESSION_ID_HERE_OR_THE_ACTUAL_ONE')
 
 # List of words to check for in stories (optional)
+
+# Subtitle configuration
+SUBTITLE_FONT = "Montserrat ExtraBold"
+SUBTITLE_FONT_SIZE = 36
+SUBTITLE_MARGIN_V = 60  # Vertical margin from bottom
+SUBTITLE_BOLD = -1  # -1 for auto, 0 for normal, 1 for bold
+SUBTITLE_OUTLINE_COLOUR = "&HFF000000"  # Black outline
+SUBTITLE_BORDER_STYLE = 1  # Border style
+SUBTITLE_OUTLINE = 2  # Outline thickness
+SUBTITLE_SHADOW = 2  # Shadow distance
+SUBTITLE_SHADOW_COLOUR = "&HAA000000"  # Semi-transparent black shadow
+
+# Character configuration
+character_resources_path = os.path.join(project_path, "resources", "characters")
+if not os.path.exists(character_resources_path):
+    print(f"Warning: Characters directory not found at {character_resources_path}")
+    characters = []
+else:
+    characters = []
+    for item in os.listdir(character_resources_path):
+        char_dir = os.path.join(character_resources_path, item)
+        if os.path.isdir(char_dir):
+            # Look for image and config files
+            image_file = None
+            config_file = os.path.join(char_dir, "config.json")
+            
+            for file in os.listdir(char_dir):
+                if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    image_file = os.path.join(char_dir, file)
+                    break
+            
+            if image_file and os.path.exists(config_file):
+                try:
+                    with open(config_file, 'r') as f:
+                        char_config = json.load(f)
+                    characters.append({
+                        'name': item,
+                        'image': image_file,
+                        'voice': char_config.get('voice', 'en_us_002'),
+                        'display_name': char_config.get('display_name', item)
+                    })
+                except Exception as e:
+                    print(f"Warning: Could not load character config for {item}: {e}")
+
+if not characters:
+    print("Warning: No valid characters found. Multi-character dialogue will not be available.")

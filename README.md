@@ -14,6 +14,7 @@ Created by [egebese](https://x.com/egebese).
     *   Select background videos from your `resources/footage/` directory, with thumbnail previews.
     *   Choose background music from your `resources/music/` directory, with audio previews.
     *   Select from a wide range of TikTok TTS voices.
+*   **Multi-Character Dialogue Support:** Create engaging dialogue videos with multiple characters. Use the format `[Character Name]: <dialogue text>` in your story content. Each character can have their own voice and image that appears during their speaking segments.
 *   **Local Video Output:** Saves generated videos to the `generated_shorts/` directory.
 *   **TikTok TTS Narration:** Utilizes the [mark-rez/TikTok-Voice-TTS](https://github.com/mark-rez/TikTok-Voice-TTS) library for dynamic and natural-sounding text-to-speech.
 *   **Customizable Aesthetics:**
@@ -97,6 +98,16 @@ Before running, ensure the following files and directories are set up:
     *   Add your MP4 background videos to the `resources/footage/` directory.
     *   Add your MP3/WAV/OGG music files to the `resources/music/` directory. (The UI will copy `music.mp3` to `web_ui/static/music_assets/` for preview if it exists at the expected location).
     *   Ensure your `resources/images/reddit_submission_template.png` is in place.
+    *   **For Multi-Character Dialogue:** Create character folders in `resources/characters/`. Each character folder should contain:
+        *   An image file (PNG/JPG) named `image.jpg` or `image.png`
+        *   A `config.json` file with voice settings, e.g.:
+          ```json
+          {
+            "voice": "en_us_002",
+            "display_name": "Character Name"
+          }
+          ```
+        *   The folder name should match the character identifier used in dialogue.
 2.  **Start the Flask Server:**
     Open your terminal, navigate to the project's root directory, ensure your virtual environment is activated, and run:
     ```bash
@@ -106,9 +117,10 @@ Before running, ensure the following files and directories are set up:
     Open your web browser and go to `http://127.0.0.1:5001` (or the port specified in the terminal output).
 4.  **Generate Videos:**
     *   Fill in the "Title" and "Story" fields.
+    *   **For Multi-Character Dialogue:** Use the format `[Character Name]: <dialogue text>` in your story content. Each character will be automatically detected and their image/voice will be used if configured.
     *   Select a background video from the displayed thumbnails.
     *   Select background music and preview it.
-    *   Choose a TTS voice from the paginated table.
+    *   Choose a TTS voice from the paginated table (this will be the default voice if characters don't have specific voices configured).
     *   Click "Generate Video". The video will be processed and then downloaded by your browser. It will also be saved in the `generated_shorts/` directory.
 
 ### (Alternative) Original CLI Usage (Limited Functionality)
@@ -136,6 +148,7 @@ For CLI usage with `stories.txt`:
 ## Customization
 
 *   **Video Editing Logic:** Modify `reddit_shorts/create_short.py` to change FFmpeg parameters, subtitle styles, or video composition.
+*   **Subtitle Styling:** Subtitle appearance can be customized through the web UI or by modifying the subtitle configuration variables in `reddit_shorts/config.py`. Available options include font, font size, margins, colors, outlines, and shadows.
 *   **Title Image Generation:** Adjust title placement, font, or text wrapping in `reddit_shorts/make_submission_image.py`.
 *   **TTS Voice Management:** Voices are sourced from the `tiktok_voice` library and managed in `web_ui/routes.py` for the UI.
 *   **Configuration:** Edit `reddit_shorts/config.py` for resource paths, etc.

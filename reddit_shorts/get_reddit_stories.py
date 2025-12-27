@@ -1,6 +1,7 @@
 import os
 import random
 import uuid # For generating unique IDs for stories
+import re
 
 # Removed praw, dotenv, and time imports as they are no longer needed for local file processing.
 # from dotenv import load_dotenv
@@ -10,6 +11,41 @@ from reddit_shorts.config import stories_file_path, bad_words_list # music list 
 # load_dotenv() # Not needed
 # reddit_client_id = os.environ['REDDIT_CLIENT_ID'] # Not needed
 # reddit_client_secret = os.environ['REDDIT_CLIENT_SECRET'] # Not needed
+
+
+def parse_dialogue(text: str) -> dict:
+    """
+    Parse dialogue format like [Character 1]: <lines>, [Character 2]: <lines>
+    Returns a dict with 'dialogue' key containing list of (character, text) tuples,
+    and 'narrative' key containing non-dialogue text.
+    """
+    dialogue_pattern = r'\[([^\]]+)\]:\s*(.+?)(?=\[|$)'  # Match [Character]: text until next [ or end
+    matches = re.findall(dialogue_pattern, text, re.DOTALL)
+    
+    if matches:
+        # This is a dialogue story
+        dialogue = []
+        for char, line in matches:
+            dialogue.append({
+                'character': char.strip(),
+                'text': line.strip()
+            })
+        
+        # Remove dialogue from text to get narrative
+        narrative = re.sub(dialogue_pattern, '', text, flags=re.DOTALL).strip()
+        
+        return {
+            'is_dialogue': True,
+            'dialogue': dialogue,
+            'narrative': narrative
+        }
+    else:
+        # Regular narrative story
+        return {
+            'is_dialogue': False,
+            'dialogue': [],
+            'narrative': text
+        }
 
 
 # The Submission class might be too complex for local files initially.
@@ -53,7 +89,15 @@ def parse_stories_from_file(file_path: str) -> list[dict]:
                     while idx < len(lines) and not lines[idx].strip().startswith("Title:"):
                         story_body_lines.append(lines[idx].strip())
                         idx += 1
-                    current_story["selftext"] = "\n".join(story_body_lines).strip()
+                    story_text = "\n".join(story_body_lines).strip()
+                    current_story["selftext"] = story_text
+                    
+                    # Parse dialogue if present
+                    dialogue_data = parse_dialogue(story_text)
+                    current_story["is_dialogue"] = dialogue_data["is_dialogue"]
+                    current_story["dialogue"] = dialogue_data["dialogue"]
+                    current_story["narrative"] = dialogue_data["narrative"]
+                    
                     continue # Already incremented idx in the inner loop
 
                 idx += 1

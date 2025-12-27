@@ -8,7 +8,7 @@ import shutil # For cleaning up temp directories
 from whisper.utils import get_writer
 
 # project_path is derived in config.py and used for temp paths if not overridden
-from reddit_shorts.config import project_path as default_project_path, footage, music, output_video_path as global_output_video_path
+from reddit_shorts.config import project_path as default_project_path, footage, music, output_video_path as global_output_video_path, SUBTITLE_FONT, SUBTITLE_FONT_SIZE, SUBTITLE_MARGIN_V, SUBTITLE_BOLD, SUBTITLE_OUTLINE_COLOUR, SUBTITLE_BORDER_STYLE, SUBTITLE_OUTLINE, SUBTITLE_SHADOW, SUBTITLE_SHADOW_COLOUR
 from reddit_shorts.utils import random_choice_music
 
 
@@ -49,6 +49,8 @@ def create_short_video(**kwargs) -> str | None:
     # TTS tracks for title and content - provided by a preceding step (e.g. modified make_tts.py)
     narrator_title_track_path = kwargs.get('video_tts_path') # Path to title TTS audio file
     narrator_content_track_path = kwargs.get('content_tts_path') # Path to content (selftext) TTS audio file
+    dialogue_tts = kwargs.get('dialogue_tts', []) # List of dialogue TTS segments
+    is_dialogue = kwargs.get('is_dialogue', False)
 
     # Commentor and platform TTS are removed as per our simplification
     # commentor_track_path = kwargs.get('commentor_track')
@@ -107,24 +109,41 @@ def create_short_video(**kwargs) -> str | None:
     space_between_tts = 0.5  # seconds
     current_total_duration = 0.0
 
-    if narrator_title_track_path and os.path.exists(narrator_title_track_path):
-        audio_segments.append(ffmpeg.input(narrator_title_track_path))
-        current_total_duration += get_audio_duration(narrator_title_track_path)
-        # Add silence after title if content follows
-        if narrator_content_track_path and os.path.exists(narrator_content_track_path):
-            audio_segments.append(ffmpeg.input(f'aevalsrc=0:d={space_between_tts}', f='lavfi'))
-            current_total_duration += space_between_tts
+    if is_dialogue and dialogue_tts:
+        # For dialogue stories, use dialogue TTS segments
+        print(f"Processing {len(dialogue_tts)} dialogue segments...")
+        
+        for i, dialogue_segment in enumerate(dialogue_tts):
+            segment_path = dialogue_segment['path']
+            if os.path.exists(segment_path):
+                audio_segments.append(ffmpeg.input(segment_path))
+                segment_duration = get_audio_duration(segment_path)
+                current_total_duration += segment_duration
+                
+                # Add silence between segments (except for the last one)
+                if i < len(dialogue_tts) - 1:
+                    audio_segments.append(ffmpeg.input(f'aevalsrc=0:d={space_between_tts}', f='lavfi'))
+                    current_total_duration += space_between_tts
     else:
-        print("Warning: Narrator title track not found or not provided.")
+        # Regular narrative processing
+        if narrator_title_track_path and os.path.exists(narrator_title_track_path):
+            audio_segments.append(ffmpeg.input(narrator_title_track_path))
+            current_total_duration += get_audio_duration(narrator_title_track_path)
+            # Add silence after title if content follows
+            if narrator_content_track_path and os.path.exists(narrator_content_track_path):
+                audio_segments.append(ffmpeg.input(f'aevalsrc=0:d={space_between_tts}', f='lavfi'))
+                current_total_duration += space_between_tts
+        else:
+            print("Warning: Narrator title track not found or not provided.")
 
-    if narrator_content_track_path and os.path.exists(narrator_content_track_path):
-        audio_segments.append(ffmpeg.input(narrator_content_track_path))
-        current_total_duration += get_audio_duration(narrator_content_track_path)
-    else:
-        print("Warning: Narrator content track not found or not provided.")
+        if narrator_content_track_path and os.path.exists(narrator_content_track_path):
+            audio_segments.append(ffmpeg.input(narrator_content_track_path))
+            current_total_duration += get_audio_duration(narrator_content_track_path)
+        else:
+            print("Warning: Narrator content track not found or not provided.")
 
     if not audio_segments:
-        print("Error: No valid TTS audio tracks provided for title or content. Cannot create video.")
+        print("Error: No valid TTS audio tracks provided. Cannot create video.")
         shutil.rmtree(temp_processing_dir, ignore_errors=True) # Clean up temp dir
         return None
 
@@ -147,18 +166,51 @@ def create_short_video(**kwargs) -> str | None:
         shutil.rmtree(temp_processing_dir, ignore_errors=True)
         return None
 
-    # Whisper transcription for subtitles
-    try:
-        print("Starting Whisper transcription for subtitles...")
-        writer_options = {"max_line_count": 1, "max_words_per_line": 1}
-        whisper_model = whisper.load_model("tiny.en", device="cpu") # Consider base or small for better accuracy if tiny is too basic
-        tts_combined_transcribed = whisper_model.transcribe(tts_combined_path, language="en", fp16=False, word_timestamps=True, task="transcribe")
-        srt_writer = get_writer("srt", os.path.dirname(tts_combined_srt_path)) # Pass directory to writer
-        srt_writer(tts_combined_transcribed, os.path.basename(tts_combined_srt_path), writer_options)
-        print(f"Subtitles generated: {tts_combined_srt_path}")
-        if not os.path.exists(tts_combined_srt_path):
-            print("Warning: SRT file was not created by Whisper.")
-            # Fallback: create an empty SRT file to prevent ffmpeg error if subtitles are mandatory in filter graph
+    # Subtitle generation
+    if is_dialogue and dialogue_tts:
+        # For dialogue, create subtitles manually with character names
+        print("Creating manual subtitles for dialogue...")
+        with open(tts_combined_srt_path, 'w', encoding='utf-8') as srt_file:
+            subtitle_index = 1
+            current_time = title_tts_duration + (space_between_tts if title_tts_duration > 0 and dialogue_tts else 0)
+            
+            for dialogue_segment in dialogue_tts:
+                char_name = dialogue_segment['character']
+                segment_text = dialogue_segment['text']
+                segment_path = dialogue_segment['path']
+                
+                if os.path.exists(segment_path):
+                    segment_duration = get_audio_duration(segment_path)
+                    if segment_duration > 0:
+                        # Format timestamps for SRT (HH:MM:SS,mmm)
+                        start_time = current_time
+                        end_time = current_time + segment_duration
+                        
+                        start_str = f"{int(start_time//3600):02d}:{int((start_time%3600)//60):02d}:{start_time%60:06.3f}".replace('.', ',')
+                        end_str = f"{int(end_time//3600):02d}:{int((end_time%3600)//60):02d}:{end_time%60:06.3f}".replace('.', ',')
+                        
+                        # Write SRT entry
+                        srt_file.write(f"{subtitle_index}\n")
+                        srt_file.write(f"{start_str} --> {end_str}\n")
+                        srt_file.write(f"[{char_name}]: {segment_text}\n\n")
+                        
+                        subtitle_index += 1
+                        current_time += segment_duration + space_between_tts
+        
+        print(f"Manual subtitles created: {tts_combined_srt_path}")
+    else:
+        # Whisper transcription for regular subtitles
+        try:
+            print("Starting Whisper transcription for subtitles...")
+            writer_options = {"max_line_count": 1, "max_words_per_line": 1}
+            whisper_model = whisper.load_model("tiny.en", device="cpu") # Consider base or small for better accuracy if tiny is too basic
+            tts_combined_transcribed = whisper_model.transcribe(tts_combined_path, language="en", fp16=False, word_timestamps=True, task="transcribe")
+            srt_writer = get_writer("srt", os.path.dirname(tts_combined_srt_path)) # Pass directory to writer
+            srt_writer(tts_combined_transcribed, os.path.basename(tts_combined_srt_path), writer_options)
+            print(f"Subtitles generated: {tts_combined_srt_path}")
+            if not os.path.exists(tts_combined_srt_path):
+                print("Warning: SRT file was not created by Whisper.")
+                # Fallback: create an empty SRT file to prevent ffmpeg error if subtitles are mandatory in filter graph
             with open(tts_combined_srt_path, 'w') as f:
                 f.write("") 
     except Exception as e:
@@ -312,12 +364,61 @@ def create_short_video(**kwargs) -> str | None:
         # Example: Show for first 3 seconds if no title TTS: enable='between(t,0,3)'
         # main_stream = ffmpeg.overlay(main_stream, overlay_stream, x='(W-w)/2', y='(H-h)/3', enable='between(t,0,3)')
 
+    # Character overlays for dialogue
+    if is_dialogue and dialogue_tts:
+        from reddit_shorts.config import characters
+        char_image_map = {char['name']: char['image'] for char in characters}
+        char_display_map = {char['display_name']: char['name'] for char in characters}
+        
+        current_time = title_tts_duration + (space_between_tts if title_tts_duration > 0 and dialogue_tts else 0)
+        
+        for dialogue_segment in dialogue_tts:
+            char_name = dialogue_segment['character']
+            segment_path = dialogue_segment['path']
+            
+            # Find the character image
+            char_key = char_display_map.get(char_name, char_name)
+            char_image_path = char_image_map.get(char_key)
+            
+            if char_image_path and os.path.exists(char_image_path):
+                segment_duration = get_audio_duration(segment_path)
+                if segment_duration > 0:
+                    # Create character overlay stream
+                    char_overlay = (
+                        ffmpeg
+                        .input(char_image_path)
+                        .filter('scale', w='min(400,iw)', h='-1')  # Scale character image smaller
+                    )
+                    
+                    # Overlay character image during their speaking time
+                    main_stream = ffmpeg.overlay(
+                        main_stream, 
+                        char_overlay, 
+                        x='W-w-20',  # Position in bottom right with 20px margin
+                        y='H-h-20', 
+                        enable=f'between(t,{current_time},{current_time + segment_duration})'
+                    )
+                    print(f"Added character overlay for '{char_name}' from {current_time:.1f}s to {current_time + segment_duration:.1f}s")
+            
+            current_time += segment_duration + space_between_tts
+
     if os.path.exists(tts_combined_srt_path) and os.path.getsize(tts_combined_srt_path) > 0:
+        # Use kwargs values if provided, otherwise config defaults
+        subtitle_font = kwargs.get('subtitle_font', SUBTITLE_FONT)
+        subtitle_font_size = kwargs.get('subtitle_font_size', SUBTITLE_FONT_SIZE)
+        subtitle_margin_v = kwargs.get('subtitle_margin_v', SUBTITLE_MARGIN_V)
+        subtitle_bold = kwargs.get('subtitle_bold', SUBTITLE_BOLD)
+        subtitle_outline_colour = kwargs.get('subtitle_outline_colour', SUBTITLE_OUTLINE_COLOUR)
+        subtitle_border_style = kwargs.get('subtitle_border_style', SUBTITLE_BORDER_STYLE)
+        subtitle_outline = kwargs.get('subtitle_outline', SUBTITLE_OUTLINE)
+        subtitle_shadow = kwargs.get('subtitle_shadow', SUBTITLE_SHADOW)
+        subtitle_shadow_colour = kwargs.get('subtitle_shadow_colour', SUBTITLE_SHADOW_COLOUR)
+        
         main_stream = ffmpeg.filter(
             main_stream,
             'subtitles',
             filename=tts_combined_srt_path,
-            force_style=f'''MarginV=60,Bold=-1,Fontname=Montserrat ExtraBold,Fontsize=36,OutlineColour=&HFF000000,BorderStyle=1,Outline=2,Shadow=2,ShadowColour=&HAA000000'''
+            force_style=f'''MarginV={subtitle_margin_v},Bold={subtitle_bold},Fontname={subtitle_font},Fontsize={subtitle_font_size},OutlineColour={subtitle_outline_colour},BorderStyle={subtitle_border_style},Outline={subtitle_outline},Shadow={subtitle_shadow},ShadowColour={subtitle_shadow_colour}'''
         )
     else:
         print("SRT file is missing or empty. Skipping subtitles filter.")

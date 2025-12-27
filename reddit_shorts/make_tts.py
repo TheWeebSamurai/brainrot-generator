@@ -91,10 +91,13 @@ def generate_tiktok_tts_for_story(title: str, text_content: str, story_id: str, 
     Generates TTS audio for title and content using the mark-rez/TikTok-Voice-TTS library
     and saves them to the specified temp_dir.
     Accepts an optional 'voice' kwarg for the voice code (e.g., 'en_us_002').
+    For dialogue stories, generates separate TTS for each character's lines.
     Returns a dictionary with paths to the generated TTS files.
     """
-    generated_paths = {'video_tts_path': None, 'content_tts_path': None}
+    generated_paths = {'video_tts_path': None, 'content_tts_path': None, 'dialogue_tts': []}
     selected_voice_code = kwargs.get('voice', None)
+    dialogue = kwargs.get('dialogue', [])
+    is_dialogue = kwargs.get('is_dialogue', False)
     
     active_voice_enum = DEFAULT_TIKTOK_VOICE_ENUM
     if selected_voice_code:
@@ -106,8 +109,8 @@ def generate_tiktok_tts_for_story(title: str, text_content: str, story_id: str, 
             print(f"Warning: Invalid voice code '{selected_voice_code}' provided. Falling back to default voice {DEFAULT_TIKTOK_VOICE_ENUM.value}.")
             # active_voice_enum remains DEFAULT_TIKTOK_VOICE_ENUM
 
-    if not title and not text_content:
-        print("Error: Both title and text content are empty. Cannot generate TTS.")
+    if not title and not text_content and not dialogue:
+        print("Error: Both title, text content, and dialogue are empty. Cannot generate TTS.")
         return generated_paths
 
     # Ensure the temporary directory for this story exists
@@ -161,6 +164,61 @@ def generate_tiktok_tts_for_story(title: str, text_content: str, story_id: str, 
             traceback.print_exc()
     else:
         print("Text content is empty, skipping content TTS generation.")
+
+    # --- Generate TTS for Dialogue ---
+    if is_dialogue and dialogue:
+        print(f"Generating TTS for {len(dialogue)} dialogue segments...")
+        from reddit_shorts.config import characters
+        
+        # Create a mapping of character names to their voices and info
+        char_map = {char['name']: char for char in characters}
+        
+        for i, dialogue_segment in enumerate(dialogue):
+            char_name = dialogue_segment['character']
+            char_text = dialogue_segment['text']
+            
+            # Find character config
+            char_config = None
+            for char in characters:
+                if char['display_name'].lower() == char_name.lower() or char['name'].lower() == char_name.lower():
+                    char_config = char
+                    break
+            
+            if not char_config:
+                print(f"Warning: Character '{char_name}' not found in character configs. Using default voice.")
+                char_voice = active_voice_enum
+            else:
+                try:
+                    char_voice = Voice(char_config['voice'])
+                except:
+                    print(f"Warning: Invalid voice '{char_config['voice']}' for character '{char_name}'. Using default.")
+                    char_voice = active_voice_enum
+            
+            # Generate TTS for this dialogue segment
+            dialogue_filename = f"dialogue_{story_id}_{i}.mp3"
+            dialogue_path = os.path.join(temp_dir, dialogue_filename)
+            
+            try:
+                tiktok_library_tts(
+                    text=char_text,
+                    voice=char_voice,
+                    output_file_path=dialogue_path,
+                    play_sound=False
+                )
+                if os.path.exists(dialogue_path) and os.path.getsize(dialogue_path) > 0:
+                    generated_paths['dialogue_tts'].append({
+                        'path': dialogue_path,
+                        'character': char_name,
+                        'text': char_text,
+                        'voice': char_voice.value if hasattr(char_voice, 'value') else str(char_voice)
+                    })
+                    print(f"Dialogue TTS {i} for '{char_name}' successfully generated: {dialogue_path}")
+                else:
+                    print(f"Error: Dialogue TTS {i} file not generated or empty.")
+            except Exception as e:
+                print(f"Error during dialogue TTS generation for segment {i}: {e}")
+    elif is_dialogue:
+        print("Dialogue flag set but no dialogue segments found.")
 
     return generated_paths
 
